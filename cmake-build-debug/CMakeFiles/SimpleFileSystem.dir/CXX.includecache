@@ -1,0 +1,22 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+E:/Data/Projects/C++/SimpleFileSystem/src/my_file_system.cpp
+my_file_system.h
+E:/Data/Projects/C++/SimpleFileSystem/src/my_file_system.h
+
+E:/Data/Projects/C++/SimpleFileSystem/src/my_file_system.h
+cstdio
+-
+cstdlib
+-
+cstring
+-
+ctime
+-
+
