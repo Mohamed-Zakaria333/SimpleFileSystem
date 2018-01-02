@@ -1,6 +1,82 @@
 #include "my_file_system.h"
 
 /**
+ * Command : None
+ * Command Format : None
+ * Function Interface : void my_startsys()
+ * Function : Called by main and enter into file system
+ * Input : None
+ * Output : None
+ */
+/*
+函数需完成的工作：
+① 申请虚拟磁盘空间；
+② 使用C语言的库函数fopen()打开myfsys文件：若文件存在，则转③；若文件不存在，则创建之，转⑤
+③ 使用C语言的库函数fread()读入myfsys文件内容到用户空间中的一个缓冲区中，并判断其开始的8个字节内容是否为“10101010”（文件系统魔数），如果是，则转④；否则转⑤；
+④ 将上述缓冲区中的内容复制到内存中的虚拟磁盘空间中；转⑦
+⑤ 在屏幕上显示“myfsys文件系统不存在，现在开始创建文件系统”信息，并调用my_format()对①中申请到的虚拟磁盘空间进行格式化操作。转⑥；
+⑥ 将虚拟磁盘中的内容保存到myfsys文件中；转⑦
+⑦ 使用C语言的库函数fclose()关闭myfsys文件；
+⑧ 初始化用户打开文件表，将表项0分配给根目录文件使用，并填写根目录文件的相关信息，由于根目录没有上级目录，所以表项中的dirno和diroff分别置为5（根目录所在起始块号）和0；并将ptrptrCurDir指针指向该用户打开文件表项。
+⑨ 将当前目录设置为根目录。
+ */
+void my_startsys()
+{
+    FILE *fp;
+    unsigned char buf[SIZE];
+    fcb *root;
+    int i;
+    myvhard = (unsigned char *)malloc(SIZE);
+    memset(myvhard, 0, SIZE);
+    if((fp = fopen(myfilename, "r")) != nullptr)
+    {
+        fread(buf, SIZE, 1, fp);
+        if(strcmp(((block0 *) buf)->magic, "10101010") != 0)
+        {
+            for(i = 0; i < SIZE; i++)
+                myvhard[i] = buf[i];
+        }
+        else
+        {
+            fclose(fp);
+            printf("myfilesys is not exist, begin to create the file...\n");
+            my_format();
+            fp = fopen(myfilename, "w");
+            fwrite(myvhard, SIZE, 1, fp);
+        }
+    }
+    else
+    {
+        printf("myfilesys is not exist, begin to create the file...\n");
+        my_format();
+        fp = fopen(myfilename, "w");
+        fwrite(myvhard, SIZE, 1, fp);
+    }
+    fclose(fp);
+    root = (fcb *)(myvhard + 5 * BLOCK_SIZE);
+    strcpy(openfilelist[0].filename, root->filename);
+    strcpy(openfilelist[0].exname, root->exname);
+    openfilelist[0].attribute = root->attribute;
+    openfilelist[0].time = root->time;
+    openfilelist[0].date = root->date;
+    openfilelist[0].first = root->first;
+    openfilelist[0].length = root->length;
+    openfilelist[0].free = root->free;
+    openfilelist[0].dirno = 5;
+    openfilelist[0].diroff = 0;
+    strcpy(openfilelist[0].dir, "\\root\\");
+    openfilelist[0].father = 0;
+    openfilelist[0].count = 0;
+    openfilelist[0].fcbstate = 0;
+    openfilelist[0].topenfile = 1;
+    for(i = 1; i < MAX_OPEN_FILE; i++)
+        openfilelist[i].topenfile = 0;
+    curdir = 0;
+    strcpy(currentdir, "\\root\\");
+    startp = ((block0 *) myvhard)->startblock;
+}
+
+/**
  * Command : format
  * Command Format : format
  * Function Interface : void my_format()
@@ -73,6 +149,33 @@ void my_format()
     root->first = 5;
     root->length = 2 * sizeof(fcb);
     root->free = 1;
+}
+
+/**
+ * Command : exit
+ * Command Format : exitsys
+ * Function Interface : void my_exitsys()
+ * Function : exit file system
+ * Input : None
+ * Output : None
+ */
+/*
+函数需完成的工作：
+① 使用C库函数fopen()打开磁盘上的myfsys文件；
+② 将虚拟磁盘空间中的所有内容保存到磁盘上的myfsys文件中；
+③ 使用c语言的库函数fclose()关闭myfsys文件；
+④ 撤销用户打开文件表，释放其内存空间
+⑤ 释放虚拟磁盘空间。
+ */
+void my_exitsys()
+{
+    FILE *fp;
+    while(curdir)
+        curdir = my_close(curdir);
+    fp = fopen(myfilename, "w");
+    fwrite(myvhard, SIZE, 1, fp);
+    fclose(fp);
+    free(myvhard);
 }
 
 /**
@@ -253,41 +356,6 @@ void my_rmdir(char * dirname)
 }
 
 /**
- * Command : ls
- * Command Format : ls
- * Function Interface : void my_ls(void)
- * Function : list the content in the current directory
- * Input : None
- * Output : None
- */
-/*
-函数需完成的工作：
-① 调用do_read()读出当前目录文件内容到内存；
-② 将读出的目录文件的信息按照一定的格式显示到屏幕上；
-③ 返回。
- */
-void my_ls()
-{
-    fcb *fcbptr;
-    char text[MAX_TEXT];
-    int rbn, i;
-    openfilelist[curdir].count = 0;
-    rbn = do_read(curdir, openfilelist[curdir].length, text);
-    fcbptr = (fcb *)text;
-    for(i = 0; i < rbn / sizeof(fcb); i++)
-    {
-        if(fcbptr->free)
-        {
-            if(fcbptr->attribute & 0x20)
-                printf("%s\\\t\t<DIR>\t\t%d/%d/%d\t%02d:%02d:%02d\n", fcbptr->filename, (fcbptr->date >> 9) + 1980, (fcbptr->date >> 5) & 0x000f, fcbptr->date & 0x001f, fcbptr->time >> 11, (fcbptr->time >> 5) & 0x003f, fcbptr->time & 0x001f * 2);
-            else
-                printf("%s.%s\t\t%dB\t\t%d/%d/%d\t%02d:%02d:%02d\t\n", fcbptr->filename, fcbptr->exname, (int)(fcbptr->length), (fcbptr->date >> 9) + 1980, (fcbptr->date >> 5) & 0x000f, fcbptr->date & 0x1f, fcbptr->time >> 11, (fcbptr->time >> 5) & 0x3f, fcbptr->time & 0x1f * 2);
-        }
-        fcbptr++;
-    }
-}
-
-/**
  * Command : cd
  * Command Format : cd dn
  * Function Interface : void my_cd(char * dirname)
@@ -340,6 +408,41 @@ void my_cd(char * dirname)
             curdir = fd;
         else
             return;
+    }
+}
+
+/**
+ * Command : ls
+ * Command Format : ls
+ * Function Interface : void my_ls(void)
+ * Function : list the content in the current directory
+ * Input : None
+ * Output : None
+ */
+/*
+函数需完成的工作：
+① 调用do_read()读出当前目录文件内容到内存；
+② 将读出的目录文件的信息按照一定的格式显示到屏幕上；
+③ 返回。
+ */
+void my_ls()
+{
+    fcb *fcbptr;
+    char text[MAX_TEXT];
+    int rbn, i;
+    openfilelist[curdir].count = 0;
+    rbn = do_read(curdir, openfilelist[curdir].length, text);
+    fcbptr = (fcb *)text;
+    for(i = 0; i < rbn / sizeof(fcb); i++)
+    {
+        if(fcbptr->free)
+        {
+            if(fcbptr->attribute & 0x20)
+                printf("%s\\\t\t<DIR>\t\t%d/%d/%d\t%02d:%02d:%02d\n", fcbptr->filename, (fcbptr->date >> 9) + 1980, (fcbptr->date >> 5) & 0x000f, fcbptr->date & 0x001f, fcbptr->time >> 11, (fcbptr->time >> 5) & 0x003f, fcbptr->time & 0x001f * 2);
+            else
+                printf("%s.%s\t\t%dB\t\t%d/%d/%d\t%02d:%02d:%02d\t\n", fcbptr->filename, fcbptr->exname, (int)(fcbptr->length), (fcbptr->date >> 9) + 1980, (fcbptr->date >> 5) & 0x000f, fcbptr->date & 0x1f, fcbptr->time >> 11, (fcbptr->time >> 5) & 0x3f, fcbptr->time & 0x1f * 2);
+        }
+        fcbptr++;
     }
 }
 
@@ -427,6 +530,75 @@ int my_create(char * filename)
     fcbptr->length = openfilelist[curdir].length;
     openfilelist[curdir].count = 0;
     do_write(curdir, (char *)fcbptr, sizeof(fcb), 2);      /*????????fcb . ??? ???????????fcb?????????*/
+    openfilelist[curdir].fcbstate = 1;
+}
+
+/**
+ * Command : rm
+ * Command Format : rm fn
+ * Function Interface : void my_rm(const char * name)
+ * Function : delete file
+ * Input : fn : file name
+ * Output : None
+ */
+/*
+函数需完成的工作：
+① 若欲删除文件的父目录文件还没有打开，则调用my_open()打开；若打开失败，则返回，并显示错误信息；
+② 调用do_read()读出该父目录文件内容到内存，检查该目录下欲删除文件是否存在，若不存在则返回，并显示错误信息；
+③ 检查该文件是否已经打开，若已打开则关闭掉；
+④ 回收该文件所占据的磁盘块，修改FAT；
+⑤ 从文件的父目录文件中清空该文件的目录项，且free字段置为0：以覆盖写方式调用do_write()来实现；；
+⑥ 修改该父目录文件的用户打开文件表项中的长度信息，并将该表项中的fcbstate置为1；
+⑦ 返回。
+ */
+void my_rm(char * filename)
+{
+    fcb *fcbptr;
+    fat *fat1, *fat2, *fatptr1, *fatptr2;
+    char *fname, *exname, text[MAX_TEXT];
+    unsigned short blkno;
+    int rbn, i;
+    fat1 = (fat *) (myvhard + BLOCK_SIZE);
+    fat2 = (fat *) (myvhard + 3 * BLOCK_SIZE);
+    fname = strtok(filename, ".");
+    exname = strtok(nullptr, ".");
+    if(strcmp(fname, "") == 0)
+    {
+        printf("Error: Removing file must have a right name.\n");
+        return;
+    }
+    if(!exname)
+    {
+        printf("Error: Removing file must have a extern name.\n");
+        return;
+    }
+    openfilelist[curdir].count = 0;
+    rbn = do_read(curdir, openfilelist[curdir].length, text);
+    fcbptr = (fcb *)text;
+    for(i = 0; i < rbn / sizeof(fcb); i++)
+    {
+        if(strcmp(fcbptr->filename, fname) == 0 && strcmp(fcbptr->exname, exname) == 0)
+            break;
+        fcbptr++;
+    }
+    if(i == rbn / sizeof(fcb))
+    {
+        printf("Error, the file is not exist.\n");
+        return;
+    }
+    blkno = fcbptr->first;
+    while(blkno != END)
+    {
+        fatptr1 = fat1 + blkno;
+        fatptr2 = fat2 + blkno;
+        blkno = fatptr1->id;
+        fatptr1->id = FREE;
+        fatptr2->id = FREE;
+    }
+    strcpy(fcbptr->filename, "");
+    fcbptr->free = 0;
+    openfilelist[curdir].count = i * sizeof(fcb);
+    do_write(curdir, (char *)fcbptr, sizeof(fcb), 2);
     openfilelist[curdir].fcbstate = 1;
 }
 
@@ -528,10 +700,10 @@ int my_close(int fd)
         printf("Error: The file is not exist.\n");
         return -1;
     }
-    father=openfilelist[fd].father;
+    father = openfilelist[fd].father;
     if(openfilelist[fd].fcbstate)
     {
-        fcbptr = (fcb *)malloc(sizeof(fcb));  /*???????fcb??????fcbptr*/
+        fcbptr = (fcb *) malloc(sizeof(fcb));  /*???????fcb??????fcbptr*/
         strcpy(fcbptr->filename, openfilelist[fd].filename);
         strcpy(fcbptr->exname, openfilelist[fd].exname);
         fcbptr->attribute = openfilelist[fd].attribute;
@@ -553,93 +725,75 @@ int my_close(int fd)
 }
 
 /**
- * Command : write
- * Command Format : write fd
- * Function Interface : int my_write(int fd)
- * Function : write file
- * Input : fd : file index in user open table
- * Output : Bytes written
+ * Command : None
+ * Command Format : None
+ * Function Interface : int do_read (int fd, int len, char *text)
+ * Function : Called by my_read and read content in the file
+ * Input : fd : file index in user open table, len : content length, text : file to write content
+ * Output : Bytes read
  */
 /*
 函数需完成的工作：
-① 检查fd的有效性（fd不能超出用户打开文件表所在数组的最大下标），如果无效则返回-1，并显示出错信息；
-② 提示并等待用户输入写方式：（1：截断写；2：覆盖写；3：追加写）
-③ 如果用户要求的写方式是截断写，则释放文件除第一块外的其他磁盘空间内容（查找并修改FAT表），将内存用户打开文件表项中文件长度修改为0，将读写指针置为0并转④；如果用户要求的写方式是追加写，则修改文件的当前读写指针位置到文件的末尾，并转④；如果写方式是覆盖写，则直接转④；
-④ 提示用户：整个输入内容通过CTR+Z键（或其他设定的键）结束；用户可分多次输入写入内容，每次用回车结束；
-⑤ 等待用户从键盘输入文件内容，并将用户的本次输入内容保存到一临时变量text[]中，要求每次输入以回车结束，全部结束用CTR+Z键（或其他设定的键）；
-⑥ 调用do_write()函数将通过键盘键入的内容写到文件中。
-⑦ 如果do_write()函数的返回值为非负值，则将实际写入字节数增加do_write()函数返回值，否则显示出错信息，并转⑨；
-⑧ 如果text[]中最后一个字符不是结束字符CTR+Z，则转⑦继续进行写操作；否则转⑨；
-⑨ 如果当前读写指针位置大于用户打开文件表项中的文件长度，则修改打开文件表项中的文件长度信息，并将fcbstate置1；
-⑩ 返回实际写入的字节数。
+① 使用malloc()申请1024B空间作为缓冲区buf，申请失败则返回-1，并显示出错信息；
+② 将读写指针转化为逻辑块块号及块内偏移量off，利用打开文件表表项中的首块号查找FAT表，找到该逻辑块所在的磁盘块块号；将该磁盘块块号转化为虚拟磁盘上的内存位置；
+③ 将该内存位置开始的1024B（一个磁盘块）内容读入buf中；
+④ 比较buf中从偏移量off开始的剩余字节数是否大于等于应读写的字节数len，如果是，则将从off开始的buf中的len长度的内容读入到text[]中；否则，将从off开始的buf中的剩余内容读入到text[]中；
+⑤ 将读写指针增加④中已读字节数，将应读写的字节数len减去④中已读字节数，若len大于0，则转②；否则转⑥；
+⑥ 使用free()释放①中申请的buf。
+⑦ 返回实际读出的字节数。
  */
-int my_write(int fd)
+int do_read (int fd, unsigned int len, char *text)
 {
-    fat *fat1, *fat2, *fatptr1, *fatptr2;
-    int wstyle, len, ll, tmp;
-    char text[MAX_TEXT];
-    unsigned short blkno;
-    fat1 = (fat *)(myvhard + BLOCK_SIZE);
-    fat2 = (fat *)(myvhard + 3 * BLOCK_SIZE);
-    if(fd < 0 || fd >= MAX_OPEN_FILE)
+    unsigned char *buf, *blkptr;
+    fat *fat1, *fatptr;
+    unsigned short blkno, blkoff;
+    int i, ll;
+    buf = (unsigned char *) malloc(BLOCK_SIZE);
+    if(buf == nullptr)
     {
-        printf("Error: The file is not exist!\n");
+        printf("Error: Malloc failed!\n");
         return -1;
     }
-    while(1)
+    fat1 = (fat *) (myvhard + BLOCK_SIZE);
+    blkno = openfilelist[fd].first;
+    blkoff = openfilelist[fd].count;
+    if(blkoff >= openfilelist[fd].length)
     {
-        printf("Please enter the number of write style:\n1.cut write\t2.cover write\t3.add write\n");
-        scanf("%d", &wstyle);
-        if(wstyle > 0 && wstyle < 4)
-            break;
-        printf("Input Error!");
+        puts("Error: Read out of range!");
+        free(buf);
+        return -1;
     }
-    getchar();
-    switch(wstyle)
+    fatptr = fat1 + blkno;
+    while(blkoff >= BLOCK_SIZE)
     {
-        case 1:
-            blkno = openfilelist[fd].first;
-            fatptr1 = fat1 + blkno;
-            fatptr2 = fat2 + blkno;
-            blkno = fatptr1->id;
-            fatptr1->id = END;
-            fatptr2->id = END;
-            while(blkno != END)
-            {
-                fatptr1 = fat1 + blkno;
-                fatptr2 = fat2 + blkno;
-                blkno = fatptr1->id;
-                fatptr1->id = FREE;
-                fatptr2->id = FREE;
-            }
-            openfilelist[fd].count = 0;
-            openfilelist[fd].length = 0;
-            break;
-        case 2:
-            openfilelist[fd].count = 0;
-            break;
-        case 3:
-            openfilelist[fd].count = openfilelist[fd].length;
-            break;
-        default:
-            break;
+        blkno = fatptr->id;
+        blkoff -= BLOCK_SIZE;
+        fatptr = fat1 + blkno;
     }
     ll = 0;
-    printf("Please input write data(end with Ctrl+Z):\n");
-    while(gets(text))     /*?????豸??????????????????,????浽text???????????*/
+    while(ll < len)
     {
-        len = strlen(text);
-        text[len++] = '\n';
-        text[len] = '\0';
-        tmp = do_write(fd, text, len, wstyle);
-        if(tmp != -1)
-            ll += tmp;
-        if(tmp < len)
+        blkptr = myvhard + blkno * BLOCK_SIZE;
+        for(i = 0; i < BLOCK_SIZE; i++)
+            buf[i] = blkptr[i];
+        for(; blkoff < BLOCK_SIZE; blkoff++)
         {
-            printf("Write Error!");
-            break;
+            text[ll++] = buf[blkoff];
+            openfilelist[fd].count++;
+            if(ll == len || openfilelist[fd].count == openfilelist[fd].length)
+                break;
+        }
+        if(ll < len && openfilelist[fd].count != openfilelist[fd].length)
+        {
+            blkno = fatptr->id;
+            if(blkno == END)
+                break;
+            blkoff = 0;
+            fatptr = fat1 + blkno;
         }
     }
+    text[ll] = '\0';
+    free(buf);
     return ll;
 }
 
@@ -766,7 +920,7 @@ int do_write(int fd, const char *text, int len, char wstyle)
 ④ 如果do_read()的返回值为负，则显示出错信息；否则将text[]中的内容显示到屏幕上；
 ⑤ 返回。
  */
-int my_read (int fd, unsigned int len)
+int my_read(int fd, unsigned int len)
 {
     char text[MAX_TEXT];
     int ll;
@@ -785,249 +939,94 @@ int my_read (int fd, unsigned int len)
 }
 
 /**
- * Command : None
- * Command Format : None
- * Function Interface : int do_read (int fd, int len, char *text)
- * Function : Called by my_read and read content in the file
- * Input : fd : file index in user open table, len : content length, text : file to write content
- * Output : Bytes read
+ * Command : write
+ * Command Format : write fd
+ * Function Interface : int my_write(int fd)
+ * Function : write file
+ * Input : fd : file index in user open table
+ * Output : Bytes written
  */
 /*
 函数需完成的工作：
-① 使用malloc()申请1024B空间作为缓冲区buf，申请失败则返回-1，并显示出错信息；
-② 将读写指针转化为逻辑块块号及块内偏移量off，利用打开文件表表项中的首块号查找FAT表，找到该逻辑块所在的磁盘块块号；将该磁盘块块号转化为虚拟磁盘上的内存位置；
-③ 将该内存位置开始的1024B（一个磁盘块）内容读入buf中；
-④ 比较buf中从偏移量off开始的剩余字节数是否大于等于应读写的字节数len，如果是，则将从off开始的buf中的len长度的内容读入到text[]中；否则，将从off开始的buf中的剩余内容读入到text[]中；
-⑤ 将读写指针增加④中已读字节数，将应读写的字节数len减去④中已读字节数，若len大于0，则转②；否则转⑥；
-⑥ 使用free()释放①中申请的buf。
-⑦ 返回实际读出的字节数。
+① 检查fd的有效性（fd不能超出用户打开文件表所在数组的最大下标），如果无效则返回-1，并显示出错信息；
+② 提示并等待用户输入写方式：（1：截断写；2：覆盖写；3：追加写）
+③ 如果用户要求的写方式是截断写，则释放文件除第一块外的其他磁盘空间内容（查找并修改FAT表），将内存用户打开文件表项中文件长度修改为0，将读写指针置为0并转④；如果用户要求的写方式是追加写，则修改文件的当前读写指针位置到文件的末尾，并转④；如果写方式是覆盖写，则直接转④；
+④ 提示用户：整个输入内容通过CTR+Z键（或其他设定的键）结束；用户可分多次输入写入内容，每次用回车结束；
+⑤ 等待用户从键盘输入文件内容，并将用户的本次输入内容保存到一临时变量text[]中，要求每次输入以回车结束，全部结束用CTR+Z键（或其他设定的键）；
+⑥ 调用do_write()函数将通过键盘键入的内容写到文件中。
+⑦ 如果do_write()函数的返回值为非负值，则将实际写入字节数增加do_write()函数返回值，否则显示出错信息，并转⑨；
+⑧ 如果text[]中最后一个字符不是结束字符CTR+Z，则转⑦继续进行写操作；否则转⑨；
+⑨ 如果当前读写指针位置大于用户打开文件表项中的文件长度，则修改打开文件表项中的文件长度信息，并将fcbstate置1；
+⑩ 返回实际写入的字节数。
  */
-int do_read (int fd, unsigned int len, char *text)
+int my_write(int fd)
 {
-    unsigned char *buf, *blkptr;
-    fat *fat1, *fatptr;
-    unsigned short blkno, blkoff;
-    int i, ll;
-    buf = (unsigned char *) malloc(BLOCK_SIZE);
-    if(buf == nullptr)
+    fat *fat1, *fat2, *fatptr1, *fatptr2;
+    int wstyle, len, ll, tmp;
+    char text[MAX_TEXT];
+    unsigned short blkno;
+    fat1 = (fat *)(myvhard + BLOCK_SIZE);
+    fat2 = (fat *)(myvhard + 3 * BLOCK_SIZE);
+    if(fd < 0 || fd >= MAX_OPEN_FILE)
     {
-        printf("Error: Malloc failed!\n");
+        printf("Error: The file is not exist!\n");
         return -1;
     }
-    fat1 = (fat *) (myvhard + BLOCK_SIZE);
-    blkno = openfilelist[fd].first;
-    blkoff = openfilelist[fd].count;
-    if(blkoff >= openfilelist[fd].length)
+    while(1)
     {
-        puts("Error: Read out of range!");
-        free(buf);
-        return -1;
+        printf("Please enter the number of write style:\n1.cut write\t2.cover write\t3.add write\n");
+        scanf("%d", &wstyle);
+        if(wstyle > 0 && wstyle < 4)
+            break;
+        printf("Input Error!");
     }
-    fatptr = fat1 + blkno;
-    while(blkoff >= BLOCK_SIZE)
+    getchar();
+    switch(wstyle)
     {
-        blkno = fatptr->id;
-        blkoff -= BLOCK_SIZE;
-        fatptr = fat1 + blkno;
+        case 1:
+            blkno = openfilelist[fd].first;
+            fatptr1 = fat1 + blkno;
+            fatptr2 = fat2 + blkno;
+            blkno = fatptr1->id;
+            fatptr1->id = END;
+            fatptr2->id = END;
+            while(blkno != END)
+            {
+                fatptr1 = fat1 + blkno;
+                fatptr2 = fat2 + blkno;
+                blkno = fatptr1->id;
+                fatptr1->id = FREE;
+                fatptr2->id = FREE;
+            }
+            openfilelist[fd].count = 0;
+            openfilelist[fd].length = 0;
+            break;
+        case 2:
+            openfilelist[fd].count = 0;
+            break;
+        case 3:
+            openfilelist[fd].count = openfilelist[fd].length;
+            break;
+        default:
+            break;
     }
     ll = 0;
-    while(ll < len)
+    printf("Please input write data(end with Ctrl+Z):\n");
+    while(gets(text))     /*?????豸??????????????????,????浽text???????????*/
     {
-        blkptr = myvhard + blkno * BLOCK_SIZE;
-        for(i = 0; i < BLOCK_SIZE; i++)
-            buf[i] = blkptr[i];
-        for(; blkoff < BLOCK_SIZE; blkoff++)
+        len = strlen(text);
+        text[len++] = '\n';
+        text[len] = '\0';
+        tmp = do_write(fd, text, len, wstyle);
+        if(tmp != -1)
+            ll += tmp;
+        if(tmp < len)
         {
-            text[ll++] = buf[blkoff];
-            openfilelist[fd].count++;
-            if(ll == len || openfilelist[fd].count == openfilelist[fd].length)
-                break;
-        }
-        if(ll < len && openfilelist[fd].count != openfilelist[fd].length)
-        {
-            blkno = fatptr->id;
-            if(blkno == END)
-                break;
-            blkoff = 0;
-            fatptr = fat1 + blkno;
-        }
-    }
-    text[ll] = '\0';
-    free(buf);
-    return ll;
-}
-
-/**
- * Command : rm
- * Command Format : rm fn
- * Function Interface : void my_rm(const char * name)
- * Function : delete file
- * Input : fn : file name
- * Output : None
- */
-/*
-函数需完成的工作：
-① 若欲删除文件的父目录文件还没有打开，则调用my_open()打开；若打开失败，则返回，并显示错误信息；
-② 调用do_read()读出该父目录文件内容到内存，检查该目录下欲删除文件是否存在，若不存在则返回，并显示错误信息；
-③ 检查该文件是否已经打开，若已打开则关闭掉；
-④ 回收该文件所占据的磁盘块，修改FAT；
-⑤ 从文件的父目录文件中清空该文件的目录项，且free字段置为0：以覆盖写方式调用do_write()来实现；；
-⑥ 修改该父目录文件的用户打开文件表项中的长度信息，并将该表项中的fcbstate置为1；
-⑦ 返回。
- */
-void my_rm(char * filename)
-{
-    fcb *fcbptr;
-    fat *fat1, *fat2, *fatptr1, *fatptr2;
-    char *fname, *exname, text[MAX_TEXT];
-    unsigned short blkno;
-    int rbn, i;
-    fat1 = (fat *) (myvhard + BLOCK_SIZE);
-    fat2 = (fat *) (myvhard + 3 * BLOCK_SIZE);
-    fname = strtok(filename, ".");
-    exname = strtok(nullptr, ".");
-    if(strcmp(fname, "") == 0)
-    {
-        printf("Error: Removing file must have a right name.\n");
-        return;
-    }
-    if(!exname)
-    {
-        printf("Error: Removing file must have a extern name.\n");
-        return;
-    }
-    openfilelist[curdir].count = 0;
-    rbn = do_read(curdir, openfilelist[curdir].length, text);
-    fcbptr = (fcb *)text;
-    for(i = 0; i < rbn / sizeof(fcb); i++)
-    {
-        if(strcmp(fcbptr->filename, fname) == 0 && strcmp(fcbptr->exname, exname) == 0)
+            printf("Write Error!");
             break;
-        fcbptr++;
-    }
-    if(i == rbn / sizeof(fcb))
-    {
-        printf("Error, the file is not exist.\n");
-        return;
-    }
-    blkno = fcbptr->first;
-    while(blkno != END)
-    {
-        fatptr1 = fat1 + blkno;
-        fatptr2 = fat2 + blkno;
-        blkno = fatptr1->id;
-        fatptr1->id = FREE;
-        fatptr2->id = FREE;
-    }
-    strcpy(fcbptr->filename, "");
-    fcbptr->free = 0;
-    openfilelist[curdir].count = i * sizeof(fcb);
-    do_write(curdir, (char *)fcbptr, sizeof(fcb), 2);
-    openfilelist[curdir].fcbstate = 1;
-}
-
-
-/**
- * Command : None
- * Command Format : None
- * Function Interface : void my_startsys()
- * Function : Called by main and enter into file system
- * Input : None
- * Output : None
- */
-/*
-函数需完成的工作：
-① 申请虚拟磁盘空间；
-② 使用C语言的库函数fopen()打开myfsys文件：若文件存在，则转③；若文件不存在，则创建之，转⑤
-③ 使用C语言的库函数fread()读入myfsys文件内容到用户空间中的一个缓冲区中，并判断其开始的8个字节内容是否为“10101010”（文件系统魔数），如果是，则转④；否则转⑤；
-④ 将上述缓冲区中的内容复制到内存中的虚拟磁盘空间中；转⑦
-⑤ 在屏幕上显示“myfsys文件系统不存在，现在开始创建文件系统”信息，并调用my_format()对①中申请到的虚拟磁盘空间进行格式化操作。转⑥；
-⑥ 将虚拟磁盘中的内容保存到myfsys文件中；转⑦
-⑦ 使用C语言的库函数fclose()关闭myfsys文件；
-⑧ 初始化用户打开文件表，将表项0分配给根目录文件使用，并填写根目录文件的相关信息，由于根目录没有上级目录，所以表项中的dirno和diroff分别置为5（根目录所在起始块号）和0；并将ptrptrCurDir指针指向该用户打开文件表项。
-⑨ 将当前目录设置为根目录。
- */
-void my_startsys()
-{
-    FILE *fp;
-    unsigned char buf[SIZE];
-    fcb *root;
-    int i;
-    myvhard = (unsigned char *)malloc(SIZE);
-    memset(myvhard, 0, SIZE);
-    if((fp = fopen(myfilename, "r")) != nullptr)
-    {
-        fread(buf, SIZE, 1, fp);
-        if(strcmp(((block0 *) buf)->magic, "10101010") != 0)
-        {
-            for(i = 0; i < SIZE; i++)
-                myvhard[i] = buf[i];
-        }
-        else
-        {
-            fclose(fp);
-            printf("myfilesys is not exist, begin to create the file...\n");
-            my_format();
-            fp = fopen(myfilename, "w");
-            fwrite(myvhard, SIZE, 1, fp);
         }
     }
-    else
-    {
-        printf("myfilesys is not exist, begin to create the file...\n");
-        my_format();
-        fp = fopen(myfilename, "w");
-        fwrite(myvhard, SIZE, 1, fp);
-    }
-    fclose(fp);
-    root = (fcb *)(myvhard + 5 * BLOCK_SIZE);
-    strcpy(openfilelist[0].filename, root->filename);
-    strcpy(openfilelist[0].exname, root->exname);
-    openfilelist[0].attribute = root->attribute;
-    openfilelist[0].time = root->time;
-    openfilelist[0].date = root->date;
-    openfilelist[0].first = root->first;
-    openfilelist[0].length = root->length;
-    openfilelist[0].free = root->free;
-    openfilelist[0].dirno = 5;
-    openfilelist[0].diroff = 0;
-    strcpy(openfilelist[0].dir, "\\root\\");
-    openfilelist[0].father = 0;
-    openfilelist[0].count = 0;
-    openfilelist[0].fcbstate = 0;
-    openfilelist[0].topenfile = 1;
-    for(i = 1; i < MAX_OPEN_FILE; i++)
-        openfilelist[i].topenfile = 0;
-    curdir = 0;
-    strcpy(currentdir, "\\root\\");
-    startp = ((block0 *) myvhard)->startblock;
-}
-
-/**
- * Command : exitsys
- * Command Format : exitsys
- * Function Interface : void my_exitsys()
- * Function : exit file system
- * Input : None
- * Output : None
- */
-/*
-函数需完成的工作：
-① 使用C库函数fopen()打开磁盘上的myfsys文件；
-② 将虚拟磁盘空间中的所有内容保存到磁盘上的myfsys文件中；
-③ 使用c语言的库函数fclose()关闭myfsys文件；
-④ 撤销用户打开文件表，释放其内存空间
-⑤ 释放虚拟磁盘空间。
- */
-void my_exitsys()
-{
-    FILE *fp;
-    while(curdir)
-        curdir = my_close(curdir);
-    fp = fopen(myfilename, "w");
-    fwrite(myvhard, SIZE, 1, fp);
-    fclose(fp);
-    free(myvhard);
+    return ll;
 }
 
 int find_block()
