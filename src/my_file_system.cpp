@@ -16,55 +16,54 @@
  */
 void my_format()
 {
-    FILE *fp;
     fat *fat1, *fat2;
     block0 *blk0;
     time_t now;
     struct tm *nowtime;
     fcb *root;
     int i;
-    blk0 = (block0 *)myvhard;   /*????????????????*/
-    fat1 = (fat *)(myvhard + BLOCKSIZE);
-    fat2 = (fat *)(myvhard + 3 * BLOCKSIZE);
-    root = (fcb *)(myvhard + 5 * BLOCKSIZE);
+    blk0 = (block0 *)myvhard;
+    fat1 = (fat *)(myvhard + BLOCK_SIZE);
+    fat2 = (fat *)(myvhard + 3 * BLOCK_SIZE);
+    root = (fcb *)(myvhard + 5 * BLOCK_SIZE);
     strcpy(blk0->magic, "10101010");
-    strcpy(blk0->information, "My FileSystem Ver 1.0 \n Blocksize=1KB Whole size=1000KB Blocknum=1000 RootBlocknum=2 \n");  /*???????????????2??,??????????5,6 */
-    blk0->root = 5;    /*??????????????????? */
-    blk0->startblock = (unsigned char *)root;   /*blk0->startblock????????????????飬root???????????????  */
+    strcpy(blk0->information, "My FileSystem Ver 1.0 \n BLOCK_SIZE=1KB Whole size=1000KB Blocknum=1000 RootBlocknum=2 \n");  /*???????????????2??,??????????5,6 */
+    blk0->root = 5;
+    blk0->startblock = (unsigned char *) root;
     for(i = 0; i < 5; i++)
     {
         fat1->id = END;
         fat2->id = END;
         fat1++;
         fat2++;
-    }                                    /*????????0->?????飬?????1??2->FAT1,?????3??4->FAT2,????????id?END*/
-    fat1->id = 6;                        /* ?????5,6??root?????????5????????6??    */
+    }
+    fat1->id = 6;
     fat2->id = 6;
     fat1++;
     fat2++;
     fat1->id = END;
-    fat2->id = END;                      /*?????6?????root?????????????(END) */
+    fat2->id = END;
     fat1++;
     fat2++;
-    for(i = 7; i < SIZE / BLOCKSIZE; i++)
+    for(i = 7; i < SIZE / BLOCK_SIZE; i++)
     {
         fat1->id = FREE;
         fat2->id = FREE;
         fat1++;
         fat2++;
     }
-    now = time(NULL);                /*time(NULL) ??????????????????????1900-01-01 00:00:00 ???????????*/
-    nowtime = localtime(&now);            /*tm ??????????????*/
+    now = time(nullptr);
+    nowtime = localtime(&now);
     strcpy(root->filename, ".");
     strcpy(root->exname, "");
     root->attribute = 0x28;
     root->time = nowtime->tm_hour * 2048 + nowtime->tm_min * 32 + nowtime->tm_sec / 2;
     root->date = (nowtime->tm_year - 80) * 512 + (nowtime->tm_mon + 1) * 32 + nowtime->tm_mday;
-    root->first = 5;              /*??????????????5  */
-    root->length = 2 * sizeof(fcb);  /*root????????°??? . ?? .. ?????????????????fcb */
-    root->free = 1;  /*??????? .????? ?????????  */
-    root++;        /* ??root????????? .. fcb???   */
-    now = time(NULL);
+    root->first = 5;
+    root->length = 2 * sizeof(fcb);
+    root->free = 1;
+    root++;
+    now = time(nullptr);
     nowtime = localtime(&now);
     strcpy(root->filename, "..");
     strcpy(root->exname, "");
@@ -74,16 +73,13 @@ void my_format()
     root->first = 5;
     root->length = 2 * sizeof(fcb);
     root->free = 1;
-    fp = fopen(myfilename, "w");    /*myfilename???????????*/
-    fwrite(myvhard, SIZE, 1, fp);   /*??fp????????????дSIZE ???? myvhard */
-    fclose(fp);
 }
 
 /**
  * Command : mkdir
  * Command Format : mkdir dn
  * Function Interface : void my_mkdir(const char * dirname)
- * Function : create sub directory in the current directory
+ * Function : Create sub directory in the current directory
  * Input : dn : directory name
  * Output : None
  */
@@ -106,16 +102,16 @@ void my_mkdir(char * dirname)
     char text[MAX_TEXT];
     unsigned short blkno;
     int rbn, fd, i;
-    fat1 = (fat *)(myvhard + BLOCKSIZE);
-    fat2 = (fat *)(myvhard + 3 * BLOCKSIZE);
+    fat1 = (fat *)(myvhard + BLOCK_SIZE);
+    fat2 = (fat *)(myvhard + 3 * BLOCK_SIZE);
     openfilelist[curdir].count = 0;
-    rbn = do_read(curdir, openfilelist[curdir].length, text);     /*text ?????????????fcb???????   */
+    rbn = do_read(curdir, openfilelist[curdir].length, text);
     fcbptr = (fcb *)text;
-    for(i = 0; i < rbn / sizeof(fcb); i++)    /*??鵱??????????????е???????????????? */
+    for(i = 0; i < rbn / sizeof(fcb); i++)
     {
         if(strcmp(fcbptr->filename, dirname) == 0 && strcmp(fcbptr->exname, "") == 0)
         {
-            printf("Error,the dirname is already exist!\n");
+            printf("Error: The directory name is already exist!\n");
             return;
         }
         fcbptr++;
@@ -127,12 +123,12 @@ void my_mkdir(char * dirname)
             break;
         fcbptr++;
     }
-    blkno = findblock();
+    blkno = find_block();
     if(blkno == -1)
         return;
     (fat1 + blkno)->id = END;
     (fat2 + blkno)->id = END;
-    now = time(NULL);
+    now = time(nullptr);
     nowtime = localtime(&now);
     strcpy(fcbptr->filename, dirname);
     strcpy(fcbptr->exname, "");
@@ -148,8 +144,8 @@ void my_mkdir(char * dirname)
     fd = my_open(dirname);      /*????????????????my_opne()????????*/
     if(fd == -1)                  /*???????? ???????????????????????????? ???? . ?? . . ?????????*/
         return;
-    fcbptr = (fcb *)malloc(sizeof(fcb));
-    now = time(NULL);
+    fcbptr = (fcb *) malloc(sizeof(fcb));
+    now = time(nullptr);
     nowtime = localtime(&now);
     strcpy(fcbptr->filename, ".");
     strcpy(fcbptr->exname, "");
@@ -160,7 +156,7 @@ void my_mkdir(char * dirname)
     fcbptr->length = 2 * sizeof(fcb);
     fcbptr->free = 1;
     do_write(fd, (char *)fcbptr, sizeof(fcb), 2);
-    now = time(NULL);
+    now = time(nullptr);
     nowtime = localtime(&now);
     strcpy(fcbptr->filename, "..");
     strcpy(fcbptr->exname, "");
@@ -173,7 +169,6 @@ void my_mkdir(char * dirname)
     do_write(fd, (char *)fcbptr, sizeof(fcb), 2);
     free(fcbptr);
     my_close(fd);
-
     fcbptr = (fcb *)text;     /*???????????д?? text???????д??????? */
     fcbptr->length = openfilelist[curdir].length;
     openfilelist[curdir].count = 0;
@@ -201,13 +196,13 @@ void my_mkdir(char * dirname)
  */
 void my_rmdir(char * dirname)
 {
-    fcb *fcbptr,*fcbptr2;
+    fcb *fcbptr, *fcbptr2;
     fat *fat1, *fat2, *fatptr1, *fatptr2;
     char text[MAX_TEXT], text2[MAX_TEXT];
     unsigned short blkno;
     int rbn, rbn2, fd, i, j;
-    fat1 = (fat *)(myvhard + BLOCKSIZE);
-    fat2 = (fat *)(myvhard + 3 * BLOCKSIZE);
+    fat1 = (fat *)(myvhard + BLOCK_SIZE);
+    fat2 = (fat *)(myvhard + 3 * BLOCK_SIZE);
     if(strcmp(dirname, ".") == 0 || strcmp(dirname, "..") == 0)    /*??????? ??.?? ?? ??..??????? */
     {
         printf("Error,can't remove this directory.\n");
@@ -224,7 +219,7 @@ void my_rmdir(char * dirname)
     }
     if(i == rbn / sizeof(fcb))
     {
-        printf("Error,the directory is not exist.\n");
+        printf("Error: The directory is not exist.\n");
         return;
     }
     fd = my_open(dirname);
@@ -241,7 +236,7 @@ void my_rmdir(char * dirname)
         fcbptr2++;
     }
     blkno = openfilelist[fd].first;
-    while(blkno != END)              /*?????????????????????FREE,???????????С?.?? ???..??,???в?????????????*/
+    while(blkno != END)
     {
         fatptr1 = fat1 + blkno;
         fatptr2 = fat2 + blkno;
@@ -316,7 +311,7 @@ void my_cd(char * dirname)
     dir[0] = strtok(dirname, "\\");/*???????????????????dirname?????????????"\\"??????????*/
     while(1){
         i++;
-        dir[i]=strtok(NULL, "\\");/*???·?????????е????????????????   */
+        dir[i]=strtok(nullptr, "\\");/*???·?????????е????????????????   */
         if(!dir[i])
             break;
     }
@@ -377,10 +372,10 @@ int my_create(char * filename)
     int rbn, i;
     time_t now;
     struct tm *nowtime;
-    fat1 = (fat *)(myvhard + BLOCKSIZE);
-    fat2 = (fat *)(myvhard + 3*BLOCKSIZE);
+    fat1 = (fat *)(myvhard + BLOCK_SIZE);
+    fat2 = (fat *)(myvhard + 3*BLOCK_SIZE);
     fname = strtok(filename, ".");
-    exname = strtok(NULL, ".");
+    exname = strtok(nullptr, ".");
     if(strcmp(fname, "") == 0)
     {
         printf("Error,creating file must have a right name.\n");
@@ -398,7 +393,7 @@ int my_create(char * filename)
     {
         if(strcmp(fcbptr->filename, fname) == 0 && strcmp(fcbptr->exname, exname) == 0)
         {
-            printf("Error,the filename is already exist!\n");
+            printf("Error: The file name is already exist!\n");
             return -1;
         }
         fcbptr++;
@@ -410,13 +405,13 @@ int my_create(char * filename)
             break;
         fcbptr++;
     }
-    blkno = findblock();
+    blkno = find_block();
     if(blkno == -1)
         return -1;
     (fat1 + blkno)->id = END;
     (fat2 + blkno)->id = END;        /*?????????????fat->id ?????  */
 
-    now = time(NULL);
+    now = time(nullptr);
     nowtime = localtime(&now);
     strcpy(fcbptr->filename, fname);
     strcpy(fcbptr->exname, exname);
@@ -436,6 +431,7 @@ int my_create(char * filename)
 }
 
 /**
+ * Command : open
  * Command : open
  * Command Format : open fn
  * Function Interface : int my_open(char * name)
@@ -457,7 +453,7 @@ int my_open(char * filename)
     char *fname, exname[3], *str, text[MAX_TEXT];
     int rbn, fd, i;
     fname = strtok(filename, ".");     /*??? ?????.????? ?????????? */
-    str = strtok(NULL, ".");      /*??????????????????????? */
+    str = strtok(nullptr, ".");      /*??????????????????????? */
     if(str)
         strcpy(exname, str);
     else
@@ -466,7 +462,7 @@ int my_open(char * filename)
     {
         if(strcmp(openfilelist[i].filename, fname) == 0 && strcmp(openfilelist[i].exname, exname) == 0 && i != curdir)
         {
-            printf("Error,the file is already open.\n");
+            printf("Error: The file is already open.\n");
             return -1;
         }
     }
@@ -481,10 +477,10 @@ int my_open(char * filename)
     }
     if(i == rbn / sizeof(fcb))
     {
-        printf("Error,the file is not exist.\n");
+        printf("Error: The file is not exist.\n");
         return -1;
     }
-    fd = findopenfile();
+    fd = find_openfile();
     if(fd == -1)
         return -1;
     strcpy(openfilelist[fd].filename, fcbptr->filename);
@@ -529,7 +525,7 @@ int my_close(int fd)
     int father;
     if(fd < 0 || fd >= MAX_OPEN_FILE)
     {
-        printf("Error,the file is not exist.\n");
+        printf("Error: The file is not exist.\n");
         return -1;
     }
     father=openfilelist[fd].father;
@@ -583,11 +579,11 @@ int my_write(int fd)
     int wstyle, len, ll, tmp;
     char text[MAX_TEXT];
     unsigned short blkno;
-    fat1 = (fat *)(myvhard + BLOCKSIZE);
-    fat2 = (fat *)(myvhard + 3 * BLOCKSIZE);
+    fat1 = (fat *)(myvhard + BLOCK_SIZE);
+    fat2 = (fat *)(myvhard + 3 * BLOCK_SIZE);
     if(fd < 0 || fd >= MAX_OPEN_FILE)
     {
-        printf("The file is not exist!\n");
+        printf("Error: The file is not exist!\n");
         return -1;
     }
     while(1)
@@ -629,7 +625,7 @@ int my_write(int fd)
             break;
     }
     ll = 0;
-    printf("please input write data(end with Ctrl+Z):\n");
+    printf("Please input write data(end with Ctrl+Z):\n");
     while(gets(text))     /*?????豸??????????????????,????浽text???????????*/
     {
         len = strlen(text);
@@ -640,7 +636,7 @@ int my_write(int fd)
             ll += tmp;
         if(tmp < len)
         {
-            printf("Wirte Error!");
+            printf("Write Error!");
             break;
         }
     }
@@ -666,16 +662,16 @@ int my_write(int fd)
 ⑦ 如果tmplen小于len，则转②继续写入；否则转⑧；
 ⑧ 返回本次实际写入的字节数。
  */
-int do_write(int fd, char *text, int len, char wstyle)
+int do_write(int fd, const char *text, int len, char wstyle)
 {
     fat *fat1, *fat2, *fatptr1, *fatptr2;
     unsigned char *buf, *blkptr;
     unsigned short blkno, blkoff;
     int i, ll;
-    fat1 = (fat *)(myvhard + BLOCKSIZE);
-    fat2 = (fat *)(myvhard + 3 * BLOCKSIZE);
-    buf = (unsigned char *)malloc(BLOCKSIZE);
-    if(buf == NULL)
+    fat1 = (fat *) (myvhard + BLOCK_SIZE);
+    fat2 = (fat *) (myvhard + 3 * BLOCK_SIZE);
+    buf = (unsigned char *) malloc(BLOCK_SIZE);
+    if(buf == nullptr)
     {
         printf("malloc failed!\n");
         return -1;
@@ -684,12 +680,12 @@ int do_write(int fd, char *text, int len, char wstyle)
     blkoff = openfilelist[fd].count;
     fatptr1 = fat1 + blkno;
     fatptr2 = fat2 + blkno;
-    while(blkoff >= BLOCKSIZE)
+    while(blkoff >= BLOCK_SIZE)
     {
         blkno = fatptr1->id;
         if(blkno == END)
         {
-            blkno = findblock();    /*?????д????????????????????????? */
+            blkno = find_block();
             if(blkno == -1)
             {
                 free(buf);
@@ -707,30 +703,29 @@ int do_write(int fd, char *text, int len, char wstyle)
             fatptr1 = fat1 + blkno;
             fatptr2 = fat2 + blkno;
         }
-        blkoff = blkoff - BLOCKSIZE;
+        blkoff -= BLOCK_SIZE;
     }
-
     ll = 0;
     while(ll < len)
     {
-        blkptr = (unsigned char *)(myvhard + blkno * BLOCKSIZE);
-        for(i = 0; i < BLOCKSIZE; i++)
+        blkptr = myvhard + blkno * BLOCK_SIZE;
+        for(i = 0; i < BLOCK_SIZE; i++)
             buf[i] = blkptr[i];
-        for(;blkoff < BLOCKSIZE; blkoff++)
+        for(;blkoff < BLOCK_SIZE; blkoff++)
         {
-            buf[blkoff] = text[ll++];          /*??text?????????д?????????? */
+            buf[blkoff] = text[ll++];
             openfilelist[fd].count++;
             if(ll == len)
                 break;
         }
-        for(i = 0; i < BLOCKSIZE; i++)
-            blkptr[i] = buf[i];                /*?????????д????????????? */
+        for(i = 0; i < BLOCK_SIZE; i++)
+            blkptr[i] = buf[i];
         if(ll < len)
         {
             blkno = fatptr1->id;
             if(blkno == END)
             {
-                blkno = findblock();
+                blkno = find_block();
                 if(blkno == -1)
                     break;
                 fatptr1->id = blkno;
@@ -777,7 +772,7 @@ int my_read (int fd, unsigned int len)
     int ll;
     if(fd < 0 || fd >= MAX_OPEN_FILE)
     {
-        printf("The File is not exist!\n");
+        printf("Error: The File is not exist!\n");
         return -1;
     }
     openfilelist[fd].count = 0;
@@ -809,42 +804,42 @@ int my_read (int fd, unsigned int len)
  */
 int do_read (int fd, unsigned int len, char *text)
 {
-    fat *fat1, *fatptr;
     unsigned char *buf, *blkptr;
+    fat *fat1, *fatptr;
     unsigned short blkno, blkoff;
     int i, ll;
-    fat1 = (fat *)(myvhard + BLOCKSIZE);
-    buf = (unsigned char *)malloc(BLOCKSIZE);     /*??????????????????С */
-    if(buf == NULL)
+    buf = (unsigned char *) malloc(BLOCK_SIZE);
+    if(buf == nullptr)
     {
-        printf("malloc failed!\n");
+        printf("Error: Malloc failed!\n");
         return -1;
     }
-    blkno = openfilelist[fd].first;     /*???????????????У????????????? */
-    blkoff = openfilelist[fd].count;    /*??д?????????е?λ???????????λ  */
+    fat1 = (fat *) (myvhard + BLOCK_SIZE);
+    blkno = openfilelist[fd].first;
+    blkoff = openfilelist[fd].count;
     if(blkoff >= openfilelist[fd].length)
     {
-        puts("Read out of range!");
+        puts("Error: Read out of range!");
         free(buf);
         return -1;
     }
-    fatptr = fat1 + blkno;    /*????blkno???fat??   */
-    while(blkoff >= BLOCKSIZE)       /*????????д??????BLOCKSIZE??1024?????????????????????blkoff?????????С??1024????*/
+    fatptr = fat1 + blkno;
+    while(blkoff >= BLOCK_SIZE)
     {
         blkno = fatptr->id;
-        blkoff = blkoff - BLOCKSIZE;
+        blkoff -= BLOCK_SIZE;
         fatptr = fat1 + blkno;
     }
     ll = 0;
     while(ll < len)
     {
-        blkptr = (unsigned char *)(myvhard + blkno * BLOCKSIZE);   /*??λ?????????????λ??????????????*/
-        for(i = 0; i < BLOCKSIZE; i++)
-            buf[i] = blkptr[i];                         /*???????????????buf?У????е?????????ж????????blkoff??????0??1024???*/
-        for(; blkoff < BLOCKSIZE; blkoff++)
+        blkptr = myvhard + blkno * BLOCK_SIZE;
+        for(i = 0; i < BLOCK_SIZE; i++)
+            buf[i] = blkptr[i];
+        for(; blkoff < BLOCK_SIZE; blkoff++)
         {
             text[ll++] = buf[blkoff];
-            openfilelist[fd].count++;                   /*??д???????????? */
+            openfilelist[fd].count++;
             if(ll == len || openfilelist[fd].count == openfilelist[fd].length)
                 break;
         }
@@ -887,18 +882,18 @@ void my_rm(char * filename)
     char *fname, *exname, text[MAX_TEXT];
     unsigned short blkno;
     int rbn, i;
-    fat1 = (fat *)(myvhard + BLOCKSIZE);
-    fat2 = (fat *)(myvhard + 3 * BLOCKSIZE);
+    fat1 = (fat *) (myvhard + BLOCK_SIZE);
+    fat2 = (fat *) (myvhard + 3 * BLOCK_SIZE);
     fname = strtok(filename, ".");
-    exname = strtok(NULL, ".");
+    exname = strtok(nullptr, ".");
     if(strcmp(fname, "") == 0)
     {
-        printf("Error,removing file must have a right name.\n");
+        printf("Error: Removing file must have a right name.\n");
         return;
     }
     if(!exname)
     {
-        printf("Error,removing file must have a extern name.\n");
+        printf("Error: Removing file must have a extern name.\n");
         return;
     }
     openfilelist[curdir].count = 0;
@@ -910,9 +905,9 @@ void my_rm(char * filename)
             break;
         fcbptr++;
     }
-    if(i == rbn / sizeof(fcb))     /*??????????????????????  */
+    if(i == rbn / sizeof(fcb))
     {
-        printf("Error,the file is not exist.\n");
+        printf("Error, the file is not exist.\n");
         return;
     }
     blkno = fcbptr->first;
@@ -944,7 +939,7 @@ void my_rm(char * filename)
 函数需完成的工作：
 ① 申请虚拟磁盘空间；
 ② 使用C语言的库函数fopen()打开myfsys文件：若文件存在，则转③；若文件不存在，则创建之，转⑤
-③使用C语言的库函数fread()读入myfsys文件内容到用户空间中的一个缓冲区中，并判断其开始的8个字节内容是否为“10101010”（文件系统魔数），如果是，则转④；否则转⑤；
+③ 使用C语言的库函数fread()读入myfsys文件内容到用户空间中的一个缓冲区中，并判断其开始的8个字节内容是否为“10101010”（文件系统魔数），如果是，则转④；否则转⑤；
 ④ 将上述缓冲区中的内容复制到内存中的虚拟磁盘空间中；转⑦
 ⑤ 在屏幕上显示“myfsys文件系统不存在，现在开始创建文件系统”信息，并调用my_format()对①中申请到的虚拟磁盘空间进行格式化操作。转⑥；
 ⑥ 将虚拟磁盘中的内容保存到myfsys文件中；转⑦
@@ -955,33 +950,38 @@ void my_rm(char * filename)
 void my_startsys()
 {
     FILE *fp;
-    unsigned char buf[SIZE];/*???????????  */
+    unsigned char buf[SIZE];
     fcb *root;
     int i;
-    myvhard = (unsigned char *)malloc(SIZE);/*????????????? */
-    memset(myvhard, 0, SIZE);  /*??myvhard???SIZE??????? 0 ?滻?????? myvhard ??  ???????????? */
-    if((fp = fopen(myfilename, "r")) != NULL)
+    myvhard = (unsigned char *)malloc(SIZE);
+    memset(myvhard, 0, SIZE);
+    if((fp = fopen(myfilename, "r")) != nullptr)
     {
-        fread(buf, SIZE, 1, fp);/*?????????????????????? */
-        fclose(fp);
-        if(strcmp(((block0 *)buf)->magic, "10101010"))
+        fread(buf, SIZE, 1, fp);
+        if(strcmp(((block0 *) buf)->magic, "10101010") != 0)
         {
             for(i = 0; i < SIZE; i++)
                 myvhard[i] = buf[i];
         }
         else
         {
-            printf("myfilesys is not exist,begin to creat the file...\n");
+            fclose(fp);
+            printf("myfilesys is not exist, begin to create the file...\n");
             my_format();
+            fp = fopen(myfilename, "w");
+            fwrite(myvhard, SIZE, 1, fp);
         }
     }
     else
     {
-        printf("myfilesys is not exist,begin to creat the file...\n");
+        printf("myfilesys is not exist, begin to create the file...\n");
         my_format();
+        fp = fopen(myfilename, "w");
+        fwrite(myvhard, SIZE, 1, fp);
     }
-    root = (fcb *)(myvhard + 5 * BLOCKSIZE);
-    strcpy(openfilelist[0].filename, root->filename);/* ?????????????????0????????????????? root->filename ? .*/
+    fclose(fp);
+    root = (fcb *)(myvhard + 5 * BLOCK_SIZE);
+    strcpy(openfilelist[0].filename, root->filename);
     strcpy(openfilelist[0].exname, root->exname);
     openfilelist[0].attribute = root->attribute;
     openfilelist[0].time = root->time;
@@ -991,16 +991,16 @@ void my_startsys()
     openfilelist[0].free = root->free;
     openfilelist[0].dirno = 5;
     openfilelist[0].diroff = 0;
-    strcpy(openfilelist[0].dir, "\\root\\");  /*????????????????? */
-    openfilelist[0].father = 0;    /*???????????????λ?? */
-    openfilelist[0].count = 0;    /*??д??????????λ??    */
-    openfilelist[0].fcbstate = 0;  /*?????????????FCB???????0????????? */
-    openfilelist[0].topenfile = 1;  /*openfilelist[0]??????=1???????????????*/
+    strcpy(openfilelist[0].dir, "\\root\\");
+    openfilelist[0].father = 0;
+    openfilelist[0].count = 0;
+    openfilelist[0].fcbstate = 0;
+    openfilelist[0].topenfile = 1;
     for(i = 1; i < MAX_OPEN_FILE; i++)
         openfilelist[i].topenfile = 0;
-    curdir = 0;   /* ???????????е??????????????????λ?? */
-    strcpy(currentdir, "\\root\\");    /*????????????????????????·???? */
-    startp = ((block0 *)myvhard)->startblock;    /* ?????????????????????λ??  */
+    curdir = 0;
+    strcpy(currentdir, "\\root\\");
+    startp = ((block0 *) myvhard)->startblock;
 }
 
 /**
@@ -1030,22 +1030,22 @@ void my_exitsys()
     free(myvhard);
 }
 
-int findblock()   /*???fat->id?????????????????????????*/
+int find_block()
 {
     unsigned short i;
     fat *fat1, *fatptr;
-    fat1 = (fat *)(myvhard + BLOCKSIZE);
-    for(i = 7; i < SIZE / BLOCKSIZE; i++)
+    fat1 = (fat *)(myvhard + BLOCK_SIZE);
+    for(i = 7; i < SIZE / BLOCK_SIZE; i++)
     {
         fatptr = fat1 + i;
         if(fatptr->id == FREE)
             return i;
     }
-    printf("Error,Can't find free block!\n");
+    printf("Error: Can't find free block!\n");
     return -1;
 }
 
-int findopenfile()
+int find_openfile()
 {
     int i;
     for(i = 0; i < MAX_OPEN_FILE; i++)
@@ -1053,7 +1053,7 @@ int findopenfile()
         if(openfilelist[i].topenfile == 0)
             return i;
     }
-    printf("Error,open too many files!\n");
+    printf("Error: Open too many files!\n");
     return -1;
 }
 
@@ -1094,25 +1094,24 @@ int main() {
                     break;
                 }
             }
-            /*printf("%d\n", cmdn); */
             switch(cmdn)
             {
                 case 0:
-                    sp = strtok(NULL, " ");
+                    sp = strtok(nullptr, " ");
                     if(sp && (openfilelist[curdir].attribute & 0x20))
                         my_cd(sp);
                     else
                         printf("Please input the right command.\n");
                     break;
                 case 1:
-                    sp = strtok(NULL, " ");
+                    sp = strtok(nullptr, " ");
                     if(sp && (openfilelist[curdir].attribute & 0x20))
                         my_mkdir(sp);
                     else
                         printf("Please input the right command.\n");
                     break;
                 case 2:
-                    sp = strtok(NULL, " ");
+                    sp = strtok(nullptr, " ");
                     if(sp && (openfilelist[curdir].attribute & 0x20))
                         my_rmdir(sp);
                     else
@@ -1125,21 +1124,21 @@ int main() {
                         printf("Please input the right command.\n");
                     break;
                 case 4:
-                    sp = strtok(NULL, " ");
+                    sp = strtok(nullptr, " ");
                     if(sp && (openfilelist[curdir].attribute & 0x20))
                         my_create(sp);
                     else
                         printf("Please input the right command.\n");
                     break;
                 case 5:
-                    sp = strtok(NULL, " ");
+                    sp = strtok(nullptr, " ");
                     if(sp && (openfilelist[curdir].attribute & 0x20))
                         my_rm(sp);
                     else
                         printf("Please input the right command.\n");
                     break;
                 case 6:
-                    sp = strtok(NULL, " ");
+                    sp = strtok(nullptr, " ");
                     if(sp && (openfilelist[curdir].attribute & 0x20))
                     {
                         if(strchr(sp, '.'))/*????sp??'.'??γ????λ??*/

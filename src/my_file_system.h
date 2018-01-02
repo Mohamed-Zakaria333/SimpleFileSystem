@@ -8,7 +8,7 @@
 
 using namespace std;
 
-#define BLOCKSIZE 1024                          //磁盘块大小
+#define BLOCK_SIZE 1024                          //磁盘块大小
 #define SIZE 1024000                            //虚拟磁盘空间大小
 #define END 65535                               //FAT中的文件结束标志
 #define FREE 0                                  //FAT中盘块空闲标志
@@ -27,7 +27,7 @@ using namespace std;
  * |-----|-----|------------|-------------------|
  * |  3  |  4  | 	FAT2	| 文件分配表-备份 	|
  * |-----|-----|------------|-------------------|
- * |  5  |1000 |  DATA BLOCK| 数据区			|
+ * |  5  |1000 | Data Block | 数据区			|
  * |-----|-----|------------|-------------------|
  * |  5  |  5  | ROOT_DIR	| 根目录文件		|
  *
@@ -114,13 +114,13 @@ int my_create(char * fileName);                      // 创建文件
 int my_open(char * fileName);                        // 打开文件
 int my_close(int fd);                      // 关闭文件
 int my_write(int fd);                       // 写文件
-int do_write(int fd, char *text, int len, char wstyle);    // 实际写文件
+int do_write(int fd, const char *text, int len, char wstyle);    // 实际写文件
 int my_read (int fd, unsigned int len);                       // 读文件
 int do_read (int fd, unsigned int len, char *text);                 // 实际读文件
 void my_rm(char * fileName);                         // 删除文件
 void my_startsys();                                        // 进入文件系统
 void my_exitsys();                                         // 退出文件系统
-int findblock();
-int findopenfile();
+int find_block();
+int find_openfile();
 
 #endif
